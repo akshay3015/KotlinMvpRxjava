@@ -1,34 +1,31 @@
 package com.example.akshayshahane.kotlinmvpdemo
 
-import com.example.akshayshahane.kotlinmvpdemo.home.FlimsPresenter
-import com.example.akshayshahane.kotlinmvpdemo.home.GetFlimsContract
-import com.example.akshayshahane.kotlinmvpdemo.home.Response
-import com.example.akshayshahane.kotlinmvpdemo.home.ResultsItem
+import com.example.akshayshahane.kotlinmvpdemo.home.*
 import com.example.akshayshahane.kotlinmvpdemo.network.API
 import io.reactivex.Observable
 import io.reactivex.android.plugins.RxAndroidPlugins
+import io.reactivex.observers.TestObserver
 import io.reactivex.plugins.RxJavaPlugins
 import io.reactivex.schedulers.Schedulers
 import io.reactivex.subscribers.TestSubscriber
-import okhttp3.MediaType
+import okhttp3.OkHttpClient
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mock
+import org.mockito.Mockito
 import org.mockito.Mockito.*
 import org.mockito.MockitoAnnotations
-import org.mockito.Mockito
 import org.mockito.runners.MockitoJUnitRunner
-
-import retrofit2.HttpException
-import java.lang.Exception
-import java.lang.NullPointerException
-import java.util.concurrent.TimeUnit
-import okhttp3.ResponseBody
+import retrofit2.Retrofit.Builder
+import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
+import retrofit2.converter.gson.GsonConverterFactory
 import java.io.IOException
-import org.mockito.BDDMockito.given
-
-
+import java.util.concurrent.TimeUnit
 
 
 @RunWith(MockitoJUnitRunner::class)
@@ -45,6 +42,8 @@ class FilmsPresentterTest {
     @Mock
     private lateinit var api: API
 
+    lateinit var swapiRepo: StarWarsRespository
+    lateinit var mockServer: MockWebServer
 
     @Before
     fun setup() {
@@ -54,16 +53,41 @@ class FilmsPresentterTest {
         RxJavaPlugins.setIoSchedulerHandler { t -> Schedulers.trampoline() }        // Mockito has a very convenient way to inject mocks by using the @Mock annotation. To
         // inject the mocks in the test the initMocks method needs to be called.
         MockitoAnnotations.initMocks(this)
-        filmsPresenter = FlimsPresenter(filmsView)
+
+        // Initialize mock webserver
+        mockServer = MockWebServer()
+        // Start the local server
+        mockServer.start()
+
+        // Get an okhttp client
+        val okHttpClient = OkHttpClient.Builder()
+                .build()
+
+        // Get an instance of Retrofit
+        val retrofit = Builder()
+                .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
+                .baseUrl(mockServer.url("/"))
+                .addConverterFactory(GsonConverterFactory.create())
+                .client(okHttpClient)
+                .build()
+
+        // Get an instance of blogService
+        api = retrofit.create(API::class.java)
+        // Initialized repository
+        swapiRepo = StarWarsRespository(api)
+
+
+        filmsPresenter = FlimsPresenter(filmsView, swapiRepo)
 //        filmsView = Mockito.mock<GetFlimsContract.View>(GetFlimsContract.View::class.java)
         // Mock scheduler using RxJava TestScheduler.
 
     }
 
+
     @Test
     // Get a reference to the class under test
     fun createPresenter_setsThePresenterToView() {
-        filmsPresenter = FlimsPresenter(filmsView)
+        filmsPresenter = FlimsPresenter(filmsView, swapiRepo)
         // Then the presenter is set to the view
 
         verify(filmsView).presenter = filmsPresenter
@@ -73,41 +97,52 @@ class FilmsPresentterTest {
     @Test
     fun fetchValidDataShouldLoadIntoView() {
 
-        filmsPresenter.subscribe()
-
-        verify(filmsView, times(1)).showLoader(true)
-
-        val subscriber = TestSubscriber<Response>()
-
-        subscriber.awaitTerminalEvent(5,TimeUnit.SECONDS)
-        subscriber.assertNoErrors()
-
-        verify(filmsView).setAdapter(Mockito.anyList() as List<ResultsItem>)
-
-        verify(filmsView).showLoader(false)
+       //TODO implement logic
 
 
     }
 
     @Test
-    fun  fetchInvalidDataShouldThrowError(){
+    fun fetchInvalidDataShouldThrowError() {
 
-        `when`(api.fetchFilms()).thenReturn(Observable.error(IOException()))
-        filmsPresenter.subscribe()
-        val subscriber = TestSubscriber<Response>()
+        val testObserver = TestObserver<Response>()
 
-        subscriber.awaitTerminalEvent(5,TimeUnit.SECONDS)
+        val path = "/films/"
 
-        verify(filmsView, times(1)).showLoader(true)
-        verify(filmsView).showError("t")
-        verify(filmsView).showLoader(false)
+        val mockResponse = MockResponse()
+                .setResponseCode(500) // Simulate a 500 HTTP Code
+
+        mockServer.enqueue(mockResponse)
+
+        // Call the API
+        swapiRepo.films().subscribe(testObserver)
+
+        testObserver.awaitTerminalEvent(2, TimeUnit.SECONDS)
+
+        // No values
+        testObserver.assertNoValues()
+
+        // One error recorded
+        assertEquals(1, testObserver.errorCount())
+
+
+        // Get the request that was just made
+        val request = mockServer.takeRequest()
+        // Make sure we made the request to the required path
+        assertEquals(path, request.path)
+
+
 
 
     }
 
 
-
-
+    @After
+    @Throws
+    fun tearDown() {
+        // We're done with tests, shut it down
+        mockServer.shutdown()
+    }
 
 
 }

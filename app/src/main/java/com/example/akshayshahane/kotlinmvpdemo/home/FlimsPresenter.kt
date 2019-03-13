@@ -7,20 +7,21 @@ import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
 import io.reactivex.schedulers.Schedulers
 
-class FlimsPresenter(private val view: GetFlimsContract.View) : GetFlimsContract.Presenter {
+class FlimsPresenter(private val view: GetFlimsContract.View,starWarsApi : StarWarsRespository) : GetFlimsContract.Presenter {
 
 
     private lateinit var disposable: Disposable
+    private  var swapi : StarWarsRespository
 
     init {
         view.presenter = this
+        swapi = starWarsApi
     }
 
     @SuppressLint("CheckResult")
     override fun fetchFilms() {
         view.showLoader(true)
-        disposable = getRetrofitInstance(false).create(API::class.java)
-                .fetchFilms()
+        disposable = swapi.films()
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(

@@ -5,6 +5,8 @@ import android.os.Bundle
 import android.support.v7.app.AppCompatActivity
 import android.widget.Toast
 import com.example.akshayshahane.kotlinmvpdemo.R
+import com.example.akshayshahane.kotlinmvpdemo.network.API
+import com.example.akshayshahane.kotlinmvpdemo.network.getRetrofitInstance
 
 class MainActivity : AppCompatActivity(), GetFlimsContract.View {
     override lateinit var presenter: GetFlimsContract.Presenter
@@ -35,7 +37,7 @@ class MainActivity : AppCompatActivity(), GetFlimsContract.View {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        FlimsPresenter(this)
+        FlimsPresenter(this, StarWarsRespository(getRetrofitInstance(false).create(API::class.java)))
     }
 
     override fun onResume() {
